@@ -27,7 +27,7 @@ public static class NetworkManager
         foreach (var file in remoteFiles)
         {
             WebClient wc = new WebClient();
-            wc.OpenRead($"{uri}/{file.Key}");
+            wc.OpenRead($"{uri}{file.Key}");
             size += Convert.ToInt64(wc.ResponseHeaders["Content-Length"]);
             wc.CancelAsync();
         }

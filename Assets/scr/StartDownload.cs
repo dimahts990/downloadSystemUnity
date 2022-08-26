@@ -10,14 +10,11 @@ public class StartDownload : MonoBehaviour
     public GameObject checkMD5Window;
     public GameObject downloadQuestionWindoe;
     private string path;
-    private string pathArhive;
     private bool isMd5Ok;
 
     public void onClick()
     {
-        path = $"{Application.dataPath}/Files/Output/video.mp4";
-        pathArhive = $"{Application.dataPath}/Files/Archive";
-        
+        path = $"{NamespaceSource.FilePath}video.mp4";        
         CheckMD5();
     }
 
@@ -26,7 +23,7 @@ public class StartDownload : MonoBehaviour
         if (File.Exists(path))
         {
             checkMD5Window.SetActive(true);
-            await Task.Run(() => { isMd5Ok = path.MD5result("C1984F6453642C47BD776DEB3081A5A5"); });
+            await Task.Run(() => { isMd5Ok = path.MD5result(NamespaceSource.MD5fileCheck); });
             checkMD5Window.SetActive(false);
             if (!isMd5Ok)
             {
@@ -37,6 +34,10 @@ public class StartDownload : MonoBehaviour
                 SceneManager.LoadScene("game");
         }
         else
+        {
+            if (!File.Exists(NamespaceSource.FilePath))
+                Directory.CreateDirectory(NamespaceSource.FilePath);
             downloadQuestionWindoe.SetActive(true);
+        }
     }
 }

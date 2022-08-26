@@ -28,10 +28,10 @@ public class UnpackManager:MonoBehaviour
     
     public async void Init(string path, Dictionary<string,string> files)
     {
-        extractPath = $"{Application.dataPath}/Files/Output";
+        extractPath = NamespaceSource.FilePath;
         foreach (var file in files)
         {
-            allPathFiles.Add($"{path}/{file.Key}");
+            allPathFiles.Add($"{path}{file.Key}");
         }
 
         await Task.Run(() =>

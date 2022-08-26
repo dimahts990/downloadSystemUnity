@@ -11,6 +11,7 @@ using UnityEngine.UI;
 public class downloadManager : MonoBehaviour
 {
     public GameObject windowQuestion;
+    public Text textBox;
     public GameObject loadingWindow;
     public Text loadingWindowTv;
     public GameObject downloadProgressWindow;
@@ -23,6 +24,26 @@ public class downloadManager : MonoBehaviour
     private long allMb;
     private WebClient wc;
     private Dictionary<string, string> filesInfo;
+
+
+    private void OnEnable()
+    {
+        var json = new WebClient().DownloadString($"{NamespaceSource.UriSource}md5.json");
+        filesInfo = json.JsonToDictionary();
+        //собираем узнаем, сколько все вместе весят
+        allMb =
+            NetworkManager.RemoteSizeFile(filesInfo, NamespaceSource.UriSource);
+        textBox.text = $"Необходимо для загрузки ~ {allMb.LongToMbyte()} Mb. Скачать?";
+    }
+    
+    private void Update()
+    {
+        progressTV.text = $"скачалось {howMuchDownloaded.LongToMbyte()} Mb из {allMb.LongToMbyte()} Mb";
+        if (progressBar.maxValue != allMb)
+            progressBar.maxValue = allMb;
+        progressBar.value = howMuchDownloaded;
+    }
+
 
     public  void ClickYes()
     {
@@ -44,89 +65,62 @@ public class downloadManager : MonoBehaviour
                     else
                         unpack.Init(pathArhive,filesInfo);
                 }));
-                //Dictionary<string, string> res=CheckMD5Arhive();
-                
             }
         }));
     }
 
     private IEnumerator CheckMD5Archive(Action<Dictionary<string, string>> files)
     {
-        pathArhive = $"{Application.dataPath}/Files/Archive";
-        var json = new WebClient().DownloadString("https://vintstudio.ru/datafileTest/md5.json");
-        filesInfo = json.JsonToDictionary();
-        Dictionary<string, string> downloadList=new Dictionary<string, string>();
-        foreach (var jsonFile in filesInfo)
+        pathArhive = NamespaceSource.ArchivePath;
+        
+        if(File.Exists(pathArhive))
         {
-            if (File.Exists($"{pathArhive}/{jsonFile.Key}"))//проверяем, есть ли файл по такому пути
+            Dictionary<string, string> downloadList = new Dictionary<string, string>();
+            foreach (var jsonFile in filesInfo)
             {
-                if ($"{pathArhive}/{jsonFile.Key}".MD5result(jsonFile.Value))
-                    howMuchDownloadedAllFiles += new FileInfo($"{pathArhive}/{jsonFile.Key}").Length;
-                else
+                if (File.Exists($"{pathArhive}{jsonFile.Key}")) //проверяем, есть ли файл по такому пути
                 {
-                    File.Delete($"{pathArhive}/{jsonFile.Key}");
-                    downloadList.Add(jsonFile.Key, jsonFile.Value);
+                    if ($"{pathArhive}{jsonFile.Key}".MD5result(jsonFile.Value))
+                        howMuchDownloadedAllFiles += new FileInfo($"{pathArhive}{jsonFile.Key}").Length;
+                    else
+                    {
+                        File.Delete($"{pathArhive}{jsonFile.Key}");
+                        downloadList.Add(jsonFile.Key, jsonFile.Value);
+                    }
                 }
+                else
+                    downloadList.Add(jsonFile.Key, jsonFile.Value);
             }
-            else
-                downloadList.Add(jsonFile.Key,jsonFile.Value);
+            files(downloadList);
         }
-        files(downloadList);
+        else
+        {
+            Directory.CreateDirectory(pathArhive);
+            files(filesInfo);
+        }
         yield break;
     }
-    private Dictionary<string, string> CheckMD5Arhive()
-    {
-        pathArhive = $"{Application.dataPath}/Files/Archive";
-        var json = new WebClient().DownloadString("https://vintstudio.ru/datafileTest/md5.json");
-        filesInfo = json.JsonToDictionary();
-        Dictionary<string, string> downloadList=new Dictionary<string, string>();
-        foreach (var jsonFile in filesInfo)
-        {
-            if (File.Exists($"{pathArhive}/{jsonFile.Key}"))//проверяем, есть ли файл по такому пути
-            {
-                if ($"{pathArhive}/{jsonFile.Key}".MD5result(jsonFile.Value))
-                    howMuchDownloadedAllFiles += new FileInfo($"{pathArhive}/{jsonFile.Key}").Length;
-                else
-                {
-                    File.Delete($"{pathArhive}/{jsonFile.Key}");
-                    downloadList.Add(jsonFile.Key, jsonFile.Value);
-                }
-            }
-            else
-                downloadList.Add(jsonFile.Key,jsonFile.Value);
-        }
 
-        return downloadList;
-    }
-    
-    private void Update()
-    {
-        progressTV.text = $"скачалось {howMuchDownloaded.LongToMbyte()} Mb из {allMb.LongToMbyte()} Mb";
-        if (progressBar.maxValue != allMb)
-            progressBar.maxValue = allMb;
-        progressBar.value = howMuchDownloaded;
-    }
 
     public void CancleDownload()
     {
         if(wc!=null)
+        {
             wc.CancelAsync();
+            downloadProgressWindow.SetActive(false);
+        }
     }
     
     private async void DownloadFiles(Dictionary<string, string> listFiles)
     {
-        pathArhive = $"{Application.dataPath}/Files/Archive";
-        
-        //собираем узнаем, сколько все вместе весят
-        allMb =
-            NetworkManager.RemoteSizeFile(filesInfo, new Uri("https://vintstudio.ru/datafileTest"));
+        pathArhive = NamespaceSource.ArchivePath;
 
         await Task.Run(() =>
         {
             foreach (var file in listFiles)
             {
                 bool downloadComplitedFile = false;
-                var uri = new Uri($"https://vintstudio.ru/datafileTest/{file.Key}");
+                var uri = new Uri($"{NamespaceSource.UriSource}{file.Key}");
 
                 using (wc = new WebClient())
                 {
@@ -136,14 +130,24 @@ public class downloadManager : MonoBehaviour
                     };
                     wc.DownloadFileCompleted += (s, e) =>
                     {
-                        if ($"{pathArhive}/{file.Key}".MD5result(file.Value))
+                        if ($"{pathArhive}{file.Key}".MD5result(file.Value))
                         {
                             downloadComplitedFile = true;
                             howMuchDownloadedAllFiles += howMuchDownloaded;
-                            
+                        }
+
+                        if (e.Cancelled)
+                        {
+                            Debug.Log($"загрука отмененна ({e})");
+                        }
+
+                        if (e.Error != null)
+                        {
+                            Debug.Log($"ошибка загрузки ({e})");
                         }
                     };
-                    wc.DownloadFileAsync(uri, $"{pathArhive}/{file.Key}");
+                    Debug.Log($"URI: {uri}  path:{pathArhive}{file.Key}");
+                    wc.DownloadFileAsync(uri, $"{pathArhive}{file.Key}");
                 }
 
                 while (!downloadComplitedFile)
